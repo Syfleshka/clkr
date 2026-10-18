@@ -10,9 +10,21 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/main.png" width="300" alt="Main window">
-  <img src="docs/screenshots/route.png" width="300" alt="Route running">
-  <img src="docs/screenshots/light.png" width="300" alt="Light theme">
+  <a href="https://github.com/Syfleshka/clkr/releases/latest"><img src="https://img.shields.io/github/v/release/Syfleshka/clkr?label=release&color=7c6cff" alt="Latest release"></a>
+  <a href="https://github.com/Syfleshka/clkr/actions/workflows/build.yml"><img src="https://github.com/Syfleshka/clkr/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Syfleshka/clkr?color=408cff" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Syfleshka/clkr/releases/latest/download/clkr.exe"><b>Download clkr.exe</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://syfleshka.github.io/clkr/"><b>Website</b></a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/running.png" width="270" alt="Clicking">
+  <img src="docs/screenshots/route.png" width="270" alt="Route running">
+  <img src="docs/screenshots/light.png" width="270" alt="Light theme">
 </p>
 
 ## Features
@@ -61,14 +73,17 @@
 - Live statistics: clicks, elapsed time, real clicks per second with a small graph, lifetime total.
 
 <p align="center">
-  <img src="docs/screenshots/settings.png" width="300" alt="Settings">
-  <img src="docs/screenshots/compact.png" width="300" alt="Compact mode">
+  <img src="docs/screenshots/settings.png" width="270" alt="Settings">
+  <img src="docs/screenshots/compact.png" width="380" alt="Compact mode">
 </p>
 
 ## Download
 
-Every push builds `clkr.exe` with GitHub Actions; grab it from the run's **Artifacts**
-(*Actions → Build → clkr-windows-x64*). Pushing a tag like `v1.0.0` also attaches the exe to a GitHub Release.
+Get **[clkr.exe from the latest release](https://github.com/Syfleshka/clkr/releases/latest/download/clkr.exe)**
+(or browse [all releases](https://github.com/Syfleshka/clkr/releases)). Put it anywhere and run it.
+
+Every push also builds the exe with GitHub Actions (*Actions → Build → artifact `clkr-windows-x64`*).
+To publish a release, bump the version in `Cargo.toml`, update `.github/RELEASE_NOTES.md` and push a `vX.Y.Z` tag.
 
 The exe is not code-signed, so Windows SmartScreen may ask for confirmation on the first start
 (*More info → Run anyway*). Some antivirus products flag auto clickers in general because they synthesize input.
@@ -125,6 +140,9 @@ The UI is built with [egui](https://github.com/emilk/egui) on the OpenGL backend
 font, which keeps the binary small. Icons are a 14 KB subset of [Phosphor Icons](https://phosphoricons.com);
 regenerate it with `tools/subset_icons.py` after adding an icon to `src/ui/icons.rs`.
 The app icon is rendered by `tools/make_icon.py`.
+
+The website lives in `site/` and is deployed to GitHub Pages by `.github/workflows/pages.yml`
+together with the screenshots from `docs/screenshots/`.
 
 ## License
 
