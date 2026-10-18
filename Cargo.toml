@@ -1,0 +1,43 @@
+[package]
+name = "clkr"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.95"
+description = "A lightweight, good-looking auto clicker for Windows"
+license = "MIT"
+build = "build.rs"
+
+[dependencies]
+eframe = { version = "0.37", default-features = false, features = ["glow"] }
+egui = { version = "0.37", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Elsewhere (development previews) there is no Segoe UI, so keep egui's bundled fonts.
+[target.'cfg(not(windows))'.dependencies]
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_Globalization",
+    "Win32_Media",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+embed-resource = "3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
