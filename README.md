@@ -83,7 +83,8 @@ Get **[clkr.exe from the latest release](https://github.com/Syfleshka/clkr/relea
 (or browse [all releases](https://github.com/Syfleshka/clkr/releases)). Put it anywhere and run it.
 
 Every push also builds the exe with GitHub Actions (*Actions → Build → artifact `clkr-windows-x64`*).
-To publish a release, bump the version in `Cargo.toml`, update `.github/RELEASE_NOTES.md` and push a `vX.Y.Z` tag.
+To publish a release, bump the version in `Cargo.toml`, update `.github/RELEASE_NOTES.md`, then either push a
+`vX.Y.Z` tag or run the **Build** workflow on `main` manually with *release* checked (it creates the tag itself).
 
 The exe is not code-signed, so Windows SmartScreen may ask for confirmation on the first start
 (*More info → Run anyway*). Some antivirus products flag auto clickers in general because they synthesize input.
