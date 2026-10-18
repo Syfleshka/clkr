@@ -397,6 +397,7 @@ impl eframe::App for App {
             }
         });
 
+        self.edge_resize(&ctx);
         self.show_toasts(&ctx, now);
         self.show_dialog(&ctx);
         self.sync(&ctx, now);
@@ -414,6 +415,34 @@ impl eframe::App for App {
 }
 
 impl App {
+    /// The window has no system frame, so resizing from its edges is done here.
+    fn edge_resize(&self, ctx: &egui::Context) {
+        use egui::{CursorIcon, ResizeDirection};
+        const GRIP: f32 = 6.0;
+        if self.cfg.compact || self.dialog.is_some() {
+            return;
+        }
+        let rect = ctx.content_rect();
+        let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) else { return };
+        let (left, right) = (pos.x - rect.left() < GRIP, rect.right() - pos.x < GRIP);
+        let (top, bottom) = (pos.y - rect.top() < GRIP, rect.bottom() - pos.y < GRIP);
+        let (dir, cursor) = match (left, right, top, bottom) {
+            (true, _, true, _) => (ResizeDirection::NorthWest, CursorIcon::ResizeNorthWest),
+            (_, true, true, _) => (ResizeDirection::NorthEast, CursorIcon::ResizeNorthEast),
+            (true, _, _, true) => (ResizeDirection::SouthWest, CursorIcon::ResizeSouthWest),
+            (_, true, _, true) => (ResizeDirection::SouthEast, CursorIcon::ResizeSouthEast),
+            (true, ..) => (ResizeDirection::West, CursorIcon::ResizeWest),
+            (_, true, ..) => (ResizeDirection::East, CursorIcon::ResizeEast),
+            (_, _, true, _) => (ResizeDirection::North, CursorIcon::ResizeNorth),
+            (_, _, _, true) => (ResizeDirection::South, CursorIcon::ResizeSouth),
+            _ => return,
+        };
+        ctx.set_cursor_icon(cursor);
+        if ctx.input(|i| i.pointer.primary_pressed()) {
+            ctx.send_viewport_cmd(ViewportCommand::BeginResize(dir));
+        }
+    }
+
     fn tabs(&mut self, ui: &mut egui::Ui) {
         use crate::settings::Tab;
         let t = self.t();

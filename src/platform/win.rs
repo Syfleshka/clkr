@@ -3,11 +3,12 @@
 use std::mem::size_of;
 use std::sync::atomic::{AtomicIsize, Ordering};
 
-use windows_sys::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows_sys::Win32::Globalization::GetUserDefaultUILanguage;
 use windows_sys::Win32::Graphics::Dwm::{DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute};
 use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR};
 use windows_sys::Win32::Media::{timeBeginPeriod, timeEndPeriod};
+use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, GetKeyNameTextW, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
     KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MAPVK_VK_TO_VSC, MOUSE_EVENT_FLAGS, MOUSEEVENTF_ABSOLUTE,
@@ -15,9 +16,10 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_VIRTUALDESK, MOUSEINPUT, MapVirtualKeyW, SendInput,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, GA_ROOT, GetAncestor, GetCursorPos, GetForegroundWindow, GetSystemMetrics, GetWindowRect,
-    IsIconic, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_HIDE, SW_SHOW,
-    SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetCursorPos, SetForegroundWindow, SetWindowPos, ShowWindow,
+    BringWindowToTop, CallWindowProcW, GA_ROOT, GWLP_WNDPROC, GetAncestor, GetCursorPos, GetForegroundWindow,
+    GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, IsIconic, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
+    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetCursorPos,
+    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, WM_DPICHANGED, WM_GETDPISCALEDSIZE, WNDPROC,
     WindowFromPoint,
 };
 
@@ -28,12 +30,17 @@ use crate::keys;
 const CLKR_TAG: usize = 0x434C_4B52;
 
 static MAIN_HWND: AtomicIsize = AtomicIsize::new(0);
+/// winit's window procedure, wrapped by [`dpi_fix_proc`].
+static WINIT_WNDPROC: AtomicIsize = AtomicIsize::new(0);
 
 pub(super) fn main_hwnd() -> HWND {
     MAIN_HWND.load(Ordering::Relaxed) as HWND
 }
 
-/// Remember the main window and give it Windows 11 rounded corners.
+/// Remember the main window, give it Windows 11 rounded corners and fix how it
+/// reacts to moving between monitors with different scaling.
+///
+/// Must be called on the thread that owns the window.
 pub fn init_main_window(hwnd: isize) {
     MAIN_HWND.store(hwnd, Ordering::Relaxed);
     let pref = DWMWCP_ROUND;
@@ -44,6 +51,54 @@ pub fn init_main_window(hwnd: isize) {
             &pref as *const i32 as *const _,
             size_of::<i32>() as u32,
         );
+        // Store the original procedure before swapping it in, so it is never called unset.
+        WINIT_WNDPROC.store(GetWindowLongPtrW(hwnd as HWND, GWLP_WNDPROC), Ordering::Relaxed);
+        let proc: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT = dpi_fix_proc;
+        SetWindowLongPtrW(hwnd as HWND, GWLP_WNDPROC, proc as usize as isize);
+    }
+}
+
+/// Wraps winit's window procedure to handle DPI changes the way Windows expects.
+///
+/// winit sizes the borderless window itself on `WM_DPICHANGED` (and counts a
+/// border it doesn't have), ignoring the rectangle Windows suggests. While the
+/// window is being dragged across monitors with different scaling, the system
+/// move loop then fights that rectangle: the window flickers between both
+/// sizes and drifts to a wrong size. Here the window is scaled linearly (its
+/// client area covers the whole window) and the suggested rectangle is applied.
+unsafe extern "system" fn dpi_fix_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    unsafe {
+        let winit: WNDPROC = std::mem::transmute::<isize, WNDPROC>(WINIT_WNDPROC.load(Ordering::Relaxed));
+        match msg {
+            WM_GETDPISCALEDSIZE => {
+                let new_dpi = (wparam & 0xFFFF) as f64;
+                let cur_dpi = GetDpiForWindow(hwnd) as f64;
+                let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                if cur_dpi > 0.0 && GetWindowRect(hwnd, &mut r) != 0 {
+                    let size = &mut *(lparam as *mut SIZE);
+                    size.cx = ((r.right - r.left) as f64 * new_dpi / cur_dpi).round() as i32;
+                    size.cy = ((r.bottom - r.top) as f64 * new_dpi / cur_dpi).round() as i32;
+                    return 1;
+                }
+                CallWindowProcW(winit, hwnd, msg, wparam, lparam)
+            }
+            WM_DPICHANGED => {
+                let r = *(lparam as *const RECT);
+                // Let winit update its scale factor (egui rescales), then apply the system rectangle.
+                let result = CallWindowProcW(winit, hwnd, msg, wparam, lparam);
+                SetWindowPos(
+                    hwnd,
+                    std::ptr::null_mut(),
+                    r.left,
+                    r.top,
+                    r.right - r.left,
+                    r.bottom - r.top,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+                result
+            }
+            _ => CallWindowProcW(winit, hwnd, msg, wparam, lparam),
+        }
     }
 }
 
